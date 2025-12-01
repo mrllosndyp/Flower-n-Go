@@ -66,7 +66,7 @@ $user = mysqli_fetch_assoc($res);
     <form method="POST">
       <div class="field"><input type="text" name="name" value="<?=htmlspecialchars($user['name'])?>" required></div>
       <div class="field"><input type="text" name="location" value="<?=htmlspecialchars($user['location'])?>"></div>
-      <div class="field"><input type="date" name="dob" value="<?=htmlspecialchars($user['dob'])?>"></div>
+      <div class="field"><input type="date" name="birth" value="<?=htmlspecialchars($user['birth '])?></div>
       <div class="field">
         <select name="gender">
           <option value="">Gender</option>

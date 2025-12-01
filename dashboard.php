@@ -2,8 +2,8 @@
 session_start();
 
 if (!isset($_SESSION['user_id'])) {
-  header("Location: signin.php");
-  exit();
+    header("Location: signin.php");
+    exit();
 }
 ?>
 
@@ -33,6 +33,13 @@ body{
   position:sticky;
   top:0;
   z-index:1000;
+}
+
+.search{
+ padding:8px 14px;
+ border-radius:20px;
+ border:none;
+ outline:none;
 }
 
 .logo{
@@ -136,6 +143,10 @@ body{
   background:white;
 }
 
+.grid {
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+
 /* FOOTER */
 .footer{
   text-align:center;
@@ -153,15 +164,31 @@ body{
 
 <body>
 
+<?php
+include "db.php";
+
+$user_id = $_SESSION['user_id'];
+$query = mysqli_query($conn, "SELECT name FROM users WHERE id='$user_id'");
+$row = mysqli_fetch_assoc($query);
+$user_name = $row['name'];
+?>
+
 <!-- HEADER -->
 <div class="header">
   <div class="logo">🌸 Flower 'n GO</div>
+
   <div class="nav">
-    <span>Hello, <strong><?php echo $_SESSION['user']; ?></strong></span>
+    <form method="GET" action="dashboard.php">
+  <input type="text" name="search" placeholder="Search flowers..." class="search">
+</form>
+    <span>Hello, <strong><?php echo htmlspecialchars($user_name); ?></strong></span>
     <a href="profile.php">Profile</a>
+    <a href="view_cart.php">Cart</a>
+    <a href="orders.php">My Orders</a>
     <a href="logout.php" class="logout">Logout</a>
   </div>
 </div>
+
 
 
 <!-- WELCOME -->
@@ -176,67 +203,40 @@ body{
 
 <h2>Available Flowers</h2>
 
-<div class="grid">
+<?php
+include "db.php";
+
+// fetch active products
+$sql = "SELECT * FROM products WHERE is_active = 1";
+$result = mysqli_query($conn, $sql);
+
+while($row = mysqli_fetch_assoc($result)):
+?>
 
 <div class="card">
-<img src="rose.jpg">
-<div class="card-content">
-<h3>Rose Bouquet</h3>
-<p>Classic love flowers</p>
-<div class="price">₱950</div>
-<button class="buy">Add to Cart</button>
-</div>
+  <img src="uploads/<?= $row['image'] ?>">
+
+  <div class="card-content">
+    <h3><?= htmlspecialchars($row['name']) ?></h3>
+    <p><?= htmlspecialchars($row['description']) ?></p>
+    <div class="price">₱<?= number_format($row['price'],2) ?></div>
+  
+    <form method="POST" action="add_to_cart.php">
+    <input type="hidden" name="product_id" value="<?= $row['id'] ?>">
+
+    <input type="number" 
+          name="quantity" 
+          value="1" 
+          min="1"
+          style="width:60px;text-align:center;margin-bottom:5px;border-radius:8px;border:none;padding:4px;">
+
+    <button class="buy">Add to Cart</button>
+  </form>
+
+  </div>
 </div>
 
-<div class="card">
-<img src="sunflower.jpg">
-<div class="card-content">
-<h3>Sunflowers</h3>
-<p>Bright golden flowers</p>
-<div class="price">₱750</div>
-<button class="buy">Add to Cart</button>
-</div>
-</div>
-
-<div class="card">
-<img src="tulips.jpg">
-<div class="card-content">
-<h3>Tulips</h3>
-<p>Colorful fresh blooms</p>
-<div class="price">₱850</div>
-<button class="buy">Add to Cart</button>
-</div>
-</div>
-
-<div class="card">
-<img src="orchid.jpg">
-<div class="card-content">
-<h3>Orchids</h3>
-<p>Exotic luxury flowers</p>
-<div class="price">₱1200</div>
-<button class="buy">Add to Cart</button>
-</div>
-</div>
-
-<div class="card">
-<img src="lily.jpg">
-<div class="card-content">
-<h3>Lilies</h3>
-<p>Peaceful scent & beauty</p>
-<div class="price">₱900</div>
-<button class="buy">Add to Cart</button>
-</div>
-</div>
-
-<div class="card">
-<img src="custom.jpg">
-<div class="card-content">
-<h3>Custom Bouquet</h3>
-<p>Create your own</p>
-<div class="price">₱1500</div>
-<button class="buy">Customize</button>
-</div>
-</div>
+<?php endwhile; ?>
 
 </div>
 </section>

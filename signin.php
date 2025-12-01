@@ -193,7 +193,7 @@ a:hover { text-decoration:underline; }
       </div>
 
 
-            <div class="links">
+            <div class="links"> 
                 <a href="forgot.php">Forgot password?</a>
                 <a href="signup.php">Create account</a>
             </div>
