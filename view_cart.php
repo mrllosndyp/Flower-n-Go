@@ -4,7 +4,7 @@ include "db.php";
 $user = $_SESSION['user_id'];
 
 $q = mysqli_query($conn,"
-SELECT p.name,p.price,p.image,c.quantity 
+SELECT p.name,p.price,p.image,c.quantity,c.product_id 
 FROM shopping_cart c 
 JOIN products p ON c.product_id=p.id
 WHERE c.user_id=$user");
@@ -28,14 +28,14 @@ body{background:#111;color:white;font-family:sans-serif}
 <h2>Your Cart</h2>
 
 <?php $sum=0; while($row = mysqli_fetch_assoc($q)):
-$sum += $row['price'] * $row['qty'];
+$sum += $row['price'] * $row['quantity'];
 ?>
 
 <div class="item">
-<img src="uploads/<?php echo $row['image']; ?>">
+<img src="<?php echo $row['image']; ?>">
 <div>
 <h3><?php echo $row['name']; ?></h3>
-<p>Quantity: <?php echo $row['qty']; ?></p>
+<p>Quantity: <?php echo $row['quantity']; ?></p>
 <p>₱<?php echo $row['price']; ?></p>
 <a href="remove_cart.php?id=<?php echo $row['product_id']; ?>" class="delete">❌ Remove</a>
 

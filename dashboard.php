@@ -214,7 +214,7 @@ while($row = mysqli_fetch_assoc($result)):
 ?>
 
 <div class="card">
-  <img src="uploads/<?= $row['image'] ?>">
+  <img src="<?= $row['image'] ?>">
 
   <div class="card-content">
     <h3><?= htmlspecialchars($row['name']) ?></h3>
