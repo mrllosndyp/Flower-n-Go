@@ -17,6 +17,9 @@ button{background:#D4AF37;border:none;padding:12px;width:100%;margin-top:15px}
 </head>
 
 <body>
+    <!-- BACK BUTTON -->
+<div class="backBtn" onclick="goBack()">← Back</div>
+
 <div class="container">
 
 <h2>Finalize Your Order</h2>

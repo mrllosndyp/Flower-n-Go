@@ -1,14 +1,14 @@
 <?php
-// config.php -- store local-only settings
 return [
   'smtp' => [
-    'host' => 'smtp.example.com',
+    'host' => 'smtp.gmail.com',
     'port' => 587,
-    'username' => 'your-smtp-username@example.com',
-    'password' => 'your-smtp-password',
-    'secure' => 'tls', // 'ssl' or 'tls'
-    'from_email' => 'no-reply@flowerngo.com',
+    'username' => 'your-email@gmail.com',
+    'password' => 'your-app-password',
+    'secure' => 'tls',
+    'from_email' => 'your-email@gmail.com',
     'from_name' => 'Flower n GO'
   ],
-  'base_url' => 'http://localhost/FlowernGo' // adjust to your local/production base url
+  'base_url' => 'http://localhost/flower_shop',
+  'site_name' => 'Flower n GO'
 ];

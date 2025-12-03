@@ -86,9 +86,28 @@ if (!empty($order['total']) && (float)$order['total'] > 0) {
         body{background:#fff;color:#000}
         .receipt{box-shadow:none;background:#fff;color:#000}
     }
+    .backBtn{
+ position:fixed;
+ top:20px;
+ left:20px;
+ background:#D4AF37;
+ color:black;
+ padding:8px 14px;
+ border-radius:14px;
+ cursor:pointer;
+ font-weight:600;
+ box-shadow:0 0 8px black;
+ z-index:9999;
+}
+.backBtn:hover{
+ background:white;
+}
+
 </style>
 </head>
 <body>
+<!-- BACK BUTTON -->
+<div class="backBtn" onclick="goBack()">← Back</div>
 
 <div class="receipt">
     <div class="brand">
