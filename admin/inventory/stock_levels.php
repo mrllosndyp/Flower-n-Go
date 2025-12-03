@@ -851,14 +851,15 @@ $(document).ready(function() {
 </script>
 
 <style>
+@keyframes/* ========== INVENTORY MODULE STYLES ========== */
+.stock-alert {
+    animation: pulse 2s infinite;
+}
+
 @keyframes pulse {
     0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
     70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
     100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
-}
-
-.stock-alert {
-    animation: pulse 2s infinite;
 }
 
 .display-6 {
@@ -873,6 +874,32 @@ $(document).ready(function() {
 .progress-bar {
     transition: width 0.5s ease-in-out;
 }
-</style>
 
-<?php include '../inclusion/footer.php'; ?>
+/* Supplier styles */
+.supplier-card {
+    border-left: 5px solid var(--leaf-green);
+    transition: transform 0.3s;
+}
+
+.supplier-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.badge-active { background: #d4edda; color: #155724; }
+.badge-inactive { background: #f8d7da; color: #721c24; }
+.badge-suspended { background: #fff3cd; color: #856404; }
+
+/* Stock level colors */
+.bg-out-of-stock { background: linear-gradient(135deg, #dc3545, #e4606d); }
+.bg-low-stock { background: linear-gradient(135deg, #ffc107, #ffd454); color: #000; }
+.bg-medium-stock { background: linear-gradient(135deg, #17a2b8, #3ab7cc); }
+.bg-high-stock { background: linear-gradient(135deg, #28a745, #4bc766); }
+
+/* Inventory value display */
+.inventory-value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--primary-pink);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}

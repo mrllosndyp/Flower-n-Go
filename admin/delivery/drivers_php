@@ -1,0 +1,774 @@
+<?php
+include '../inclusion/header.php';
+include '../config.php';
+
+// Handle form submissions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['add_driver'])) {
+        $name = trim($_POST['name']);
+        $phone = trim($_POST['phone']);
+        $email = trim($_POST['email']);
+        $vehicle_type = $_POST['vehicle_type'];
+        $vehicle_number = trim($_POST['vehicle_number']);
+        $license_number = trim($_POST['license_number']);
+        $capacity = (int)$_POST['capacity'];
+        $status = $_POST['status'];
+        $notes = trim($_POST['notes']);
+        
+        $stmt = $conn->prepare("
+            INSERT INTO delivery_drivers 
+            (name, phone, email, vehicle_type, vehicle_number, license_number, 
+             capacity, status, notes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        
+        $stmt->bind_param(
+            "ssssssiss",
+            $name, $phone, $email, $vehicle_type, $vehicle_number, $license_number,
+            $capacity, $status, $notes
+        );
+        
+        if ($stmt->execute()) {
+            $success = "Driver added successfully!";
+            logActivity('add_driver', "Added new driver: $name");
+        }
+    }
+    
+    if (isset($_POST['update_status'])) {
+        $driver_id = (int)$_POST['driver_id'];
+        $new_status = $_POST['new_status'];
+        
+        $update_stmt = $conn->prepare("UPDATE delivery_drivers SET status = ?, updated_at = NOW() WHERE id = ?");
+        $update_stmt->bind_param("si", $new_status, $driver_id);
+        
+        if ($update_stmt->execute()) {
+            $success = "Driver status updated!";
+            logActivity('update_driver_status', "Updated driver ID $driver_id to $new_status");
+        }
+    }
+}
+
+// Get all drivers with performance stats
+$drivers_sql = "
+    SELECT d.*,
+    (SELECT COUNT(*) FROM orders o WHERE o.driver_id = d.id AND DATE(o.delivery_date) = CURDATE()) as today_deliveries,
+    (SELECT COUNT(*) FROM orders o WHERE o.driver_id = d.id AND MONTH(o.delivery_date) = MONTH(CURDATE()) AND o.status = 'delivered') as monthly_delivered,
+    (SELECT AVG(TIMESTAMPDIFF(MINUTE, o.shipped_at, o.delivered_at)) 
+     FROM orders o WHERE o.driver_id = d.id AND o.delivered_at IS NOT NULL) as avg_delivery_time,
+    (SELECT COUNT(DISTINCT DATE(o.delivery_date)) 
+     FROM orders o WHERE o.driver_id = d.id AND MONTH(o.delivery_date) = MONTH(CURDATE())) as working_days
+    FROM delivery_drivers d
+    ORDER BY d.status DESC, d.name
+";
+
+$drivers_result = $conn->query($drivers_sql);
+
+// Driver stats
+$stats_sql = "
+    SELECT 
+        COUNT(*) as total_drivers,
+        COUNT(CASE WHEN status = 'active' THEN 1 END) as active_drivers,
+        COUNT(CASE WHEN status = 'on_delivery' THEN 1 END) as on_delivery,
+        COUNT(CASE WHEN status = 'offline' THEN 1 END) as offline_drivers,
+        COUNT(CASE WHEN status = 'on_break' THEN 1 END) as on_break,
+        (SELECT COUNT(*) FROM orders WHERE driver_id IS NULL AND delivery_date = CURDATE()) as unassigned_deliveries
+    FROM delivery_drivers
+";
+
+$stats_result = $conn->query($stats_sql);
+$stats = $stats_result->fetch_assoc();
+?>
+
+<div class="page-header">
+    <h1 class="page-title">Delivery Drivers</h1>
+    <div class="page-subtitle">
+        <i class="bi bi-truck me-1"></i> Manage your delivery team and assign routes
+    </div>
+</div>
+
+<!-- Driver Stats -->
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="stats-card">
+            <div class="stats-icon" style="background: rgba(40, 167, 69, 0.1);">
+                <i class="bi bi-person-check" style="color: #28a745;"></i>
+            </div>
+            <div class="stats-number"><?php echo $stats['active_drivers']; ?></div>
+            <div class="stats-label">Active</div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="stats-card">
+            <div class="stats-icon" style="background: rgba(0, 123, 255, 0.1);">
+                <i class="bi bi-truck" style="color: #007bff;"></i>
+            </div>
+            <div class="stats-number"><?php echo $stats['on_delivery']; ?></div>
+            <div class="stats-label">On Delivery</div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="stats-card">
+            <div class="stats-icon" style="background: rgba(108, 117, 125, 0.1);">
+                <i class="bi bi-person-x" style="color: #6c757d;"></i>
+            </div>
+            <div class="stats-number"><?php echo $stats['offline_drivers']; ?></div>
+            <div class="stats-label">Offline</div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="stats-card">
+            <div class="stats-icon" style="background: rgba(255, 193, 7, 0.1);">
+                <i class="bi bi-cup" style="color: #ffc107;"></i>
+            </div>
+            <div class="stats-number"><?php echo $stats['on_break']; ?></div>
+            <div class="stats-label">On Break</div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="stats-card">
+            <div class="stats-icon" style="background: rgba(220, 53, 69, 0.1);">
+                <i class="bi bi-exclamation-triangle" style="color: #dc3545;"></i>
+            </div>
+            <div class="stats-number"><?php echo $stats['unassigned_deliveries']; ?></div>
+            <div class="stats-label">Unassigned Today</div>
+        </div>
+    </div>
+    
+    <div class="col-md-2">
+        <div class="stats-card">
+            <div class="stats-icon" style="background: rgba(255, 107, 139, 0.1);">
+                <i class="bi bi-people" style="color: var(--primary-pink);"></i>
+            </div>
+            <div class="stats-number"><?php echo $stats['total_drivers']; ?></div>
+            <div class="stats-label">Total Drivers</div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Add Driver Form -->
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0 py-3">
+                <h5 class="mb-0"><i class="bi bi-person-plus me-2 flower-icon"></i> Add New Driver</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label required">Driver Name</label>
+                        <input type="text" class="form-control form-control-floral" name="name" required>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label required">Phone</label>
+                            <input type="text" class="form-control form-control-floral" name="phone" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control form-control-floral" name="email">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label required">Vehicle Type</label>
+                            <select class="form-select form-control-floral" name="vehicle_type" required>
+                                <option value="motorcycle">Motorcycle</option>
+                                <option value="car">Car</option>
+                                <option value="van">Van</option>
+                                <option value="tricycle">Tricycle</option>
+                                <option value="bicycle">Bicycle</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label required">Vehicle Number</label>
+                            <input type="text" class="form-control form-control-floral" name="vehicle_number" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">License Number</label>
+                            <input type="text" class="form-control form-control-floral" name="license_number">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Capacity (bouquets)</label>
+                            <input type="number" class="form-control form-control-floral" name="capacity" value="20" min="1" max="100">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select form-control-floral" name="status">
+                            <option value="active" selected>Active</option>
+                            <option value="offline">Offline</option>
+                            <option value="on_break">On Break</option>
+                            <option value="maintenance">Vehicle Maintenance</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control form-control-floral" name="notes" rows="2"></textarea>
+                    </div>
+                    
+                    <button type="submit" name="add_driver" class="btn btn-floral w-100">
+                        <i class="bi bi-plus-lg me-2"></i> Add Driver
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Driver Performance -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3">
+                <h5 class="mb-0"><i class="bi bi-trophy me-2 leaf-icon"></i> Top Performers</h5>
+            </div>
+            <div class="card-body">
+                <?php
+                $top_drivers_sql = "
+                    SELECT d.name, 
+                    COUNT(o.id) as deliveries,
+                    AVG(TIMESTAMPDIFF(MINUTE, o.shipped_at, o.delivered_at)) as avg_time
+                    FROM orders o
+                    JOIN delivery_drivers d ON o.driver_id = d.id
+                    WHERE MONTH(o.delivery_date) = MONTH(CURDATE())
+                    AND o.status = 'delivered'
+                    GROUP BY d.id
+                    ORDER BY deliveries DESC
+                    LIMIT 3
+                ";
+                
+                $top_drivers_result = $conn->query($top_drivers_sql);
+                $rank = 1;
+                
+                while($top = $top_drivers_result->fetch_assoc()):
+                ?>
+                <div class="d-flex align-items-center mb-3">
+                    <div class="rank-badge me-3">#<?php echo $rank++; ?></div>
+                    <div class="flex-grow-1">
+                        <div class="fw-bold"><?php echo $top['name']; ?></div>
+                        <div class="small text-muted">
+                            <?php echo $top['deliveries']; ?> deliveries • 
+                            Avg: <?php echo round($top['avg_time']); ?> mins
+                        </div>
+                    </div>
+                    <div class="text-success">
+                        <i class="bi bi-star-fill"></i>
+                    </div>
+                </div>
+                <?php endwhile; ?>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Drivers List -->
+    <div class="col-md-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-person-badge me-2 leaf-icon"></i> 
+                    All Drivers <span class="badge bg-primary"><?php echo $drivers_result->num_rows; ?> drivers</span>
+                </h5>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-floral dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-download me-2"></i> Export
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="?export=csv">CSV</a></li>
+                        <li><a class="dropdown-item" href="?export=pdf">PDF</a></li>
+                        <li><a class="dropdown-item" href="?export=schedule">Delivery Schedule</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-floral data-table">
+                        <thead>
+                            <tr>
+                                <th>Driver</th>
+                                <th>Vehicle & Contact</th>
+                                <th>Today's Performance</th>
+                                <th>Monthly Stats</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php while($driver = $drivers_result->fetch_assoc()): 
+                                $status_colors = [
+                                    'active' => 'success',
+                                    'on_delivery' => 'primary',
+                                    'offline' => 'secondary',
+                                    'on_break' => 'warning',
+                                    'maintenance' => 'danger'
+                                ];
+                                $status_color = $status_colors[$driver['status']] ?? 'secondary';
+                                $avg_time = $driver['avg_delivery_time'] ? round($driver['avg_delivery_time']) : '--';
+                            ?>
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="driver-avatar me-3">
+                                            <?php echo strtoupper(substr($driver['name'], 0, 2)); ?>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold"><?php echo $driver['name']; ?></div>
+                                            <div class="small text-muted">
+                                                ID: D<?php echo str_pad($driver['id'], 4, '0', STR_PAD_LEFT); ?>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="small">
+                                        <div>
+                                            <i class="bi bi-truck me-1"></i>
+                                            <?php echo ucfirst($driver['vehicle_type']); ?> • 
+                                            <?php echo $driver['vehicle_number']; ?>
+                                        </div>
+                                        <div><i class="bi bi-telephone me-1"></i> <?php echo $driver['phone']; ?></div>
+                                        <?php if($driver['email']): ?>
+                                        <div><i class="bi bi-envelope me-1"></i> <?php echo $driver['email']; ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="text-center">
+                                        <div class="fw-bold text-primary"><?php echo $driver['today_deliveries']; ?></div>
+                                        <div class="small text-muted">Today's Deliveries</div>
+                                        <?php if($driver['today_deliveries'] > 0): ?>
+                                        <div class="small">
+                                            <i class="bi bi-clock me-1"></i> 
+                                            Capacity: <?php echo $driver['today_deliveries']; ?>/<?php echo $driver['capacity']; ?>
+                                        </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="row text-center">
+                                        <div class="col-6">
+                                            <div class="fw-bold text-success"><?php echo $driver['monthly_delivered']; ?></div>
+                                            <div class="small text-muted">Delivered</div>
+                                        </div>
+                                        <div class="col-6">
+                                            <div class="fw-bold text-info"><?php echo $avg_time; ?></div>
+                                            <div class="small text-muted">Avg. Time (min)</div>
+                                        </div>
+                                    </div>
+                                    <div class="small text-center text-muted mt-1">
+                                        <i class="bi bi-calendar me-1"></i> 
+                                        <?php echo $driver['working_days']; ?> working days
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-<?php echo $status_color; ?>">
+                                        <?php 
+                                        $status_labels = [
+                                            'active' => 'Available',
+                                            'on_delivery' => 'On Delivery',
+                                            'offline' => 'Offline',
+                                            'on_break' => 'On Break',
+                                            'maintenance' => 'Maintenance'
+                                        ];
+                                        echo $status_labels[$driver['status']] ?? ucfirst($driver['status']);
+                                        ?>
+                                    </span>
+                                    
+                                    <?php if($driver['status'] === 'on_delivery'): ?>
+                                    <div class="small mt-1">
+                                        <i class="bi bi-geo-alt text-primary"></i> 
+                                        <span class="live-location" data-driver="<?php echo $driver['id']; ?>">
+                                            Tracking...
+                                        </span>
+                                    </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-primary"
+                                                data-bs-toggle="modal" 
+                                                data-bs-target="#editDriverModal"
+                                                data-id="<?php echo $driver['id']; ?>"
+                                                data-name="<?php echo htmlspecialchars($driver['name']); ?>"
+                                                data-phone="<?php echo htmlspecialchars($driver['phone']); ?>"
+                                                data-email="<?php echo htmlspecialchars($driver['email']); ?>"
+                                                data-vehicle="<?php echo $driver['vehicle_type']; ?>"
+                                                data-vehicle-number="<?php echo htmlspecialchars($driver['vehicle_number']); ?>"
+                                                data-license="<?php echo htmlspecialchars($driver['license_number']); ?>"
+                                                data-capacity="<?php echo $driver['capacity']; ?>"
+                                                data-status="<?php echo $driver['status']; ?>"
+                                                data-notes="<?php echo htmlspecialchars($driver['notes']); ?>">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        
+                                        <a href="driver_details.php?id=<?php echo $driver['id']; ?>" 
+                                           class="btn btn-outline-success"
+                                           data-bs-toggle="tooltip" title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        
+                                        <div class="dropdown">
+                                            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                <i class="bi bi-gear"></i>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li>
+                                                    <form method="POST" class="px-2">
+                                                        <input type="hidden" name="driver_id" value="<?php echo $driver['id']; ?>">
+                                                        <select class="form-select form-select-sm mb-2" name="new_status" onchange="this.form.submit()">
+                                                            <option value="">Change Status</option>
+                                                            <option value="active">Available</option>
+                                                            <option value="on_delivery">On Delivery</option>
+                                                            <option value="on_break">On Break</option>
+                                                            <option value="offline">Offline</option>
+                                                        </select>
+                                                    </form>
+                                                </li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li>
+                                                    <a class="dropdown-item" href="?assign=<?php echo $driver['id']; ?>">
+                                                        <i class="bi bi-truck me-2"></i> Assign Delivery
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="?view_schedule=<?php echo $driver['id']; ?>">
+                                                        <i class="bi bi-calendar me-2"></i> View Schedule
+                                                    </a>
+                                                </li>
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li>
+                                                    <a class="dropdown-item text-danger" href="#" 
+                                                       onclick="return confirm('Remove this driver?')">
+                                                        <i class="bi bi-trash me-2"></i> Remove
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Real-time Driver Locations -->
+        <div class="card border-0 shadow-sm mt-4">
+            <div class="card-header bg-white border-0 py-3">
+                <h5 class="mb-0"><i class="bi bi-geo me-2 flower-icon"></i> Live Driver Locations</h5>
+            </div>
+            <div class="card-body">
+                <div class="driver-map">
+                    <div class="text-center p-4">
+                        <i class="bi bi-map" style="font-size: 3rem; color: #ddd;"></i>
+                        <h5 class="mt-3">Real-time Tracking</h5>
+                        <p class="text-muted">Live driver locations would appear here with GPS integration</p>
+                        
+                        <div class="row mt-4">
+                            <div class="col-md-4">
+                                <div class="driver-status-indicator">
+                                    <div class="indicator-dot bg-success"></div>
+                                    <span class="small">Available</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="driver-status-indicator">
+                                    <div class="indicator-dot bg-primary"></div>
+                                    <span class="small">On Delivery</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="driver-status-indicator">
+                                    <div class="indicator-dot bg-warning"></div>
+                                    <span class="small">On Break</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-floral mt-3" onclick="refreshLocations()">
+                            <i class="bi bi-arrow-clockwise me-2"></i> Refresh Locations
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Driver Modal -->
+<div class="modal fade" id="editDriverModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title">Edit Driver Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editDriverForm">
+                <input type="hidden" name="driver_id" id="editDriverId">
+                
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Driver Name</label>
+                        <input type="text" class="form-control form-control-floral" name="name" id="editDriverName" required>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Phone</label>
+                            <input type="text" class="form-control form-control-floral" name="phone" id="editDriverPhone" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control form-control-floral" name="email" id="editDriverEmail">
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Vehicle Type</label>
+                            <select class="form-select form-control-floral" name="vehicle_type" id="editVehicleType" required>
+                                <option value="motorcycle">Motorcycle</option>
+                                <option value="car">Car</option>
+                                <option value="van">Van</option>
+                                <option value="tricycle">Tricycle</option>
+                                <option value="bicycle">Bicycle</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Vehicle Number</label>
+                            <input type="text" class="form-control form-control-floral" name="vehicle_number" id="editVehicleNumber" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">License Number</label>
+                            <input type="text" class="form-control form-control-floral" name="license_number" id="editLicenseNumber">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Capacity (bouquets)</label>
+                            <input type="number" class="form-control form-control-floral" name="capacity" id="editCapacity" min="1" max="100">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select form-control-floral" name="status" id="editDriverStatus">
+                            <option value="active">Active</option>
+                            <option value="offline">Offline</option>
+                            <option value="on_break">On Break</option>
+                            <option value="maintenance">Vehicle Maintenance</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control form-control-floral" name="notes" id="editDriverNotes" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="update_driver" class="btn btn-floral">Update Driver</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+/* ========== DELIVERY MODULE STYLES ========== */
+.delivery-card {
+    border-left: 4px solid var(--leaf-green);
+    transition: all 0.3s;
+    background: white;
+}
+
+.delivery-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.delivery-card.no-driver {
+    border-left: 4px solid #ffc107;
+    background: rgba(255, 193, 7, 0.05);
+}
+
+.delivery-card.delivered {
+    border-left: 4px solid #28a745;
+    background: rgba(40, 167, 69, 0.05);
+}
+
+.delivery-map {
+    height: 300px;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+}
+
+.driver-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-pink) 0%, #ff8e8e 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.rank-badge {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ffd700, #ffed4e);
+    color: #856404;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.time-slot-header {
+    background: linear-gradient(135deg, var(--primary-pink), #ff8e8e);
+    color: white;
+    padding: 10px 15px;
+    border-radius: 8px 8px 0 0;
+}
+
+.route-point {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.route-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    margin-bottom: 5px;
+}
+
+.route-line {
+    width: 30px;
+    height: 3px;
+    background: #007bff;
+    margin: 0 10px;
+    margin-top: 8px;
+}
+
+.driver-status-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.indicator-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+/* Status badges for delivery */
+.badge-processing { background: linear-gradient(135deg, #cce5ff, #a8d4ff); color: #004085; }
+.badge-shipped { background: linear-gradient(135deg, #d1ecf1, #b3e0e8); color: #0c5460; }
+.badge-delivered { background: linear-gradient(135deg, #d4edda, #b8e0c1); color: #155724; }
+
+/* Driver status colors */
+.bg-success { background: #28a745 !important; }
+.bg-primary { background: #007bff !important; }
+.bg-warning { background: #ffc107 !important; }
+.bg-secondary { background: #6c757d !important; }
+.bg-danger { background: #dc3545 !important; }
+</style>
+
+<script>
+// Edit Driver Modal
+const editDriverModal = document.getElementById('editDriverModal');
+editDriverModal.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    
+    document.getElementById('editDriverId').value = button.getAttribute('data-id');
+    document.getElementById('editDriverName').value = button.getAttribute('data-name');
+    document.getElementById('editDriverPhone').value = button.getAttribute('data-phone');
+    document.getElementById('editDriverEmail').value = button.getAttribute('data-email');
+    document.getElementById('editVehicleType').value = button.getAttribute('data-vehicle');
+    document.getElementById('editVehicleNumber').value = button.getAttribute('data-vehicle-number');
+    document.getElementById('editLicenseNumber').value = button.getAttribute('data-license');
+    document.getElementById('editCapacity').value = button.getAttribute('data-capacity');
+    document.getElementById('editDriverStatus').value = button.getAttribute('data-status');
+    document.getElementById('editDriverNotes').value = button.getAttribute('data-notes');
+});
+
+// Handle edit form submission
+document.getElementById('editDriverForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Implement AJAX update here
+    alert('Driver updated successfully!');
+    $('#editDriverModal').modal('hide');
+    location.reload();
+});
+
+// Simulate live location updates
+function refreshLocations() {
+    const liveElements = document.querySelectorAll('.live-location');
+    const locations = [
+        'Makati CBD',
+        'BGC Taguig',
+        'Ortigas Center',
+        'Quezon City',
+        'Manila Bay Area',
+        'Alabang'
+    ];
+    
+    liveElements.forEach(el => {
+        const randomLocation = locations[Math.floor(Math.random() * locations.length)];
+        el.textContent = `Near ${randomLocation}`;
+    });
+    
+    alert('Locations refreshed!');
+}
+
+// Initialize DataTables
+$(document).ready(function() {
+    $('.data-table').DataTable({
+        "pageLength": 10,
+        "language": {
+            "search": "<i class='bi bi-search'></i> Search drivers:"
+        }
+    });
+    
+    // Auto-refresh locations every 30 seconds
+    setInterval(refreshLocations, 30000);
+    
+    // Calculate driver utilization
+    $('tr').each(function() {
+        const todayDeliveries = parseInt($(this).find('.text-primary').text()) || 0;
+        const capacity = parseInt($(this).find('.small:contains("Capacity")').text().split('/')[1]) || 20;
+        
+        if (todayDeliveries > 0) {
+            const utilization = (todayDeliveries / capacity) * 100;
+            if (utilization > 80) {
+                $(this).addClass('table-warning');
+            }
+        }
+    });
+});
+</script>
+
+<?php include '../inclusion/footer.php'; ?>
