@@ -61,7 +61,7 @@
 <div class="product-grid">
 
 <article class="product-card" onclick="location.href='order.php'">
-<img src="Sunfower.jpg">
+<img src="Sunflower.jpg">
 <span class="tag best">BESTSELLER</span>
 <div class="product-info">
 <h3>SUNFLOWER</h3>
@@ -74,7 +74,7 @@
 </article>
 
 <article class="product-card highlight" onclick="location.href='order.php'">
-<img src="stargazer.jpg">
+<img src="Stargazer.jpg">
 <div class="product-info">
 <h3>STARGAZER</h3>
 <p>Romantic lilies with a sweet fragrance.</p>
