@@ -1,90 +1,135 @@
 <?php
 session_start();
-include "db.php";
+require_once 'db.php';
 
-if (!isset($_SESSION['user_id'])) {
-    header("Location: place_order.php");
-    exit();
-}
-
-$user_id = $_SESSION['user_id'];
-
-// Get form data
-$address = mysqli_real_escape_string($conn, $_POST['address'] ?? '');
-$city = mysqli_real_escape_string($conn, $_POST['city'] ?? '');
-$postal_code = mysqli_real_escape_string($conn, $_POST['postal_code'] ?? '');
-$country = mysqli_real_escape_string($conn, $_POST['country'] ?? '');
-$phone = mysqli_real_escape_string($conn, $_POST['phone'] ?? '');
-$payment_method = mysqli_real_escape_string($conn, $_POST['payment_method'] ?? 'cod');
-$delivery_date = mysqli_real_escape_string($conn, $_POST['delivery_date'] ?? 'today');
-$delivery_time = mysqli_real_escape_string($conn, $_POST['delivery_time'] ?? 'anytime');
-$instructions = mysqli_real_escape_string($conn, $_POST['instructions'] ?? '');
-
-// Calculate cart total
-$cart_total = 0;
-$cart_query = "SELECT p.id, p.price, c.quantity 
-               FROM shopping_cart c 
-               JOIN products p ON c.product_id = p.id 
-               WHERE c.user_id = $user_id";
-$cart_result = mysqli_query($conn, $cart_query);
-
-$cart_items = [];
-while ($item = mysqli_fetch_assoc($cart_result)) {
-    $item_total = $item['price'] * $item['quantity'];
-    $cart_total += $item_total;
-    $cart_items[] = $item;
-}
-
-// Add delivery and service fees
-$delivery_fee = 150.00;
-$service_fee = 50.00;
-$total = $cart_total + $delivery_fee + $service_fee;
-
-// Start transaction
-mysqli_begin_transaction($conn);
-
-try {
-    // Insert order
-    $order_query = "INSERT INTO orders (user_id, status, total, address, city, postal_code, country, phone, payment, delivery_date, delivery_time, instructions) 
-                    VALUES ($user_id, 'to_ship', $total, '$address', '$city', '$postal_code', '$country', '$phone', '$payment_method', 
-                    NOW() + INTERVAL 1 DAY, '$delivery_time', '$instructions')";
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Get user ID from session
+    $user_id = $_SESSION['user_id'] ?? null;
     
-    if (!mysqli_query($conn, $order_query)) {
-        throw new Exception("Failed to create order: " . mysqli_error($conn));
+    if (!$user_id) {
+        $_SESSION['error'] = "Please login to place an order";
+        header("Location: place_order.php");
+        exit();
     }
+
+    // Get form data
+    $customer_name = $_POST['customer_name'] ?? '';
+    $phone = $_POST['phone'] ?? '';
+    $address = $_POST['address'] ?? '';
+    $city = $_POST['city'] ?? '';
+    $postal_code = $_POST['postal_code'] ?? '';
+    $country = $_POST['country'] ?? '';
+    $delivery_date = $_POST['delivery_date'] ?? '';
+    $delivery_time = $_POST['delivery_time'] ?? '';
+    $instructions = $_POST['instructions'] ?? '';
+    $payment_method = $_POST['payment_method'] ?? 'cod';
+    $payment = $payment_method; // Map payment_method to payment column
+
+    // Calculate total from cart
+    $total_amount = 0;
+    $cart_items = [];
     
-    $order_id = mysqli_insert_id($conn);
+    // Get cart items for this user
+    $cart_query = "SELECT sc.*, p.price, p.name 
+                   FROM shopping_cart sc 
+                   JOIN products p ON sc.product_id = p.id 
+                   WHERE sc.user_id = ?";
+    $stmt = $conn->prepare($cart_query);
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $cart_result = $stmt->get_result();
     
-    // Insert order items
-    foreach ($cart_items as $item) {
-        $item_price = $item['price'];
-        $item_quantity = $item['quantity'];
-        $item_total = $item_price * $item_quantity;
+    while ($item = $cart_result->fetch_assoc()) {
+        $item_total = $item['price'] * $item['quantity'];
+        $total_amount += $item_total;
+        $cart_items[] = $item;
+    }
+    $stmt->close();
+
+    if ($total_amount == 0) {
+        $_SESSION['error'] = "Your cart is empty";
+        header("Location: cart.php");
+        exit();
+    }
+
+    // Start transaction
+    $conn->begin_transaction();
+
+    try {
+        // Insert order - FIXED: Using correct column name 'total_amount' not 'total'
+        $order_sql = "INSERT INTO orders (
+            user_id, customer_name, phone, address, total_amount, 
+            payment_method, payment, status, city, postal_code, 
+            country, delivery_date, delivery_time, instructions
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)";
         
-        // Add the total column
-            $item_query = "INSERT INTO order_items (order_id, product_id, quantity, price, total) 
-            VALUES ($order_id, {$item['id']}, $item_quantity, $item_price, $item_total)";
+        $stmt = $conn->prepare($order_sql);
+        $stmt->bind_param(
+            "isssdssssssss", 
+            $user_id, 
+            $customer_name, 
+            $phone, 
+            $address, 
+            $total_amount,
+            $payment_method, 
+            $payment, 
+            $city, 
+            $postal_code, 
+            $country,
+            $delivery_date, 
+            $delivery_time, 
+            $instructions
+        );
+        $stmt->execute();
+        $order_id = $conn->insert_id;
+        $stmt->close();
+
+        // Insert order items
+        $item_sql = "INSERT INTO order_items (order_id, product_id, customization_ids, quantity, price, total_price, product_name) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $conn->prepare($item_sql);
         
-        if (!mysqli_query($conn, $item_query)) {
-            throw new Exception("Failed to add order item: " . mysqli_error($conn));
+        foreach ($cart_items as $item) {
+            $item_total = $item['price'] * $item['quantity'];
+            $stmt->bind_param(
+                "iisiids",
+                $order_id,
+                $item['product_id'],
+                $item['customization_ids'],
+                $item['quantity'],
+                $item['price'],
+                $item_total,
+                $item['name']
+            );
+            $stmt->execute();
         }
+        $stmt->close();
+
+        // Clear cart
+        $clear_cart = "DELETE FROM shopping_cart WHERE user_id = ?";
+        $stmt = $conn->prepare($clear_cart);
+        $stmt->bind_param("i", $user_id);
+        $stmt->execute();
+        $stmt->close();
+
+        // Commit transaction
+        $conn->commit();
+
+        // Success
+        $_SESSION['success'] = "Order placed successfully! Order ID: #$order_id";
+        header("Location: order_confirmation.php?order_id=" . $order_id);
+        exit();
+
+    } catch (Exception $e) {
+        // Rollback on error
+        $conn->rollback();
+        error_log("Order placement error: " . $e->getMessage());
+        $_SESSION['error'] = "Failed to place order: " . $e->getMessage();
+        header("Location: checkout.php");
+        exit();
     }
-    
-    // Clear cart
-    $clear_cart = "DELETE FROM shopping_cart WHERE user_id = $user_id";
-    if (!mysqli_query($conn, $clear_cart)) {
-        throw new Exception("Failed to clear cart: " . mysqli_error($conn));
-    }
-    
-    // Commit transaction
-    mysqli_commit($conn);
-    
-    // Redirect to success page
-    header("Location: order_success.php?id=$order_id");
+} else {
+    header("Location: order_success.php");
     exit();
-    
-} catch (Exception $e) {
-    // Rollback on error
-    mysqli_rollback($conn);
-    die("Error placing order: " . $e->getMessage());
 }
+?>

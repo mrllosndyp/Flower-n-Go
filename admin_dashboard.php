@@ -7,13 +7,11 @@ $user_query = mysqli_query($conn, "SELECT user_type FROM users WHERE id = $user_
 $user = mysqli_fetch_assoc($user_query);
 if ($user['user_type'] != 'admin') header("Location: dashboard.php");
 
-// Stats
 $orders_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM orders"))['count'] ?? 0;
 $total_sales = mysqli_fetch_assoc(mysqli_query($conn, "SELECT SUM(total_amount) as total FROM orders WHERE status != 'cancelled'"))['total'] ?? 0;
 $customers_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM users"))['count'] ?? 0;
 $products_count = mysqli_fetch_assoc(mysqli_query($conn, "SELECT COUNT(*) as count FROM products WHERE is_active = 1"))['count'] ?? 0;
 
-// AJAX response
 if (isset($_GET['stat'])) {
     $stat = $_GET['stat'];
     $response = [];
@@ -56,12 +54,10 @@ if (isset($_GET['stat'])) {
     header('Content-Type: application/json'); echo json_encode($response); exit();
 }
 
-// Data queries
 $recent_orders = mysqli_query($conn, "SELECT o.id, o.total_amount, o.status, o.created_at, CASE o.id WHEN 1 THEN 'Sandy Murillo' WHEN 2 THEN 'Abby Llaguno' WHEN 3 THEN 'Mary Franxine Nicol' ELSE u.name END as customer_name FROM orders o LEFT JOIN users u ON o.user_id = u.id ORDER BY o.created_at DESC LIMIT 5");
 $top_products = mysqli_query($conn, "SELECT p.name, p.price, p.image, p.stock, COALESCE(SUM(oi.quantity),0) as sold, p.description FROM products p LEFT JOIN order_items oi ON p.id = oi.product_id LEFT JOIN orders o ON oi.order_id = o.id AND o.status != 'cancelled' WHERE p.is_active = 1 GROUP BY p.id ORDER BY sold DESC, p.name ASC LIMIT 4");
 $low_stock = mysqli_query($conn, "SELECT name, stock, price FROM products WHERE stock <= 5 AND is_active = 1 ORDER BY stock ASC LIMIT 5");
 
-// Low stock data
 $low_stock_count = 0;
 if ($low_stock) $low_stock_count = mysqli_num_rows($low_stock);
 if ($low_stock_count == 0) {
@@ -77,7 +73,6 @@ if ($low_stock_count == 0) {
     while($product = mysqli_fetch_assoc($low_stock)) $low_stock_data[] = $product;
 }
 
-// Admin info
 $admin_name = 'Admin'; $admin_initials = 'A';
 $admin_query = mysqli_query($conn, "SELECT name FROM users WHERE id = $user_id");
 if ($admin_query) {

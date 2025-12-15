@@ -9,30 +9,95 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = $_SESSION['user_id'];
 
+// Check if this is a direct purchase (from "Buy Now" button)
+if(isset($_POST['buy_now'])) {
+    // Handle direct purchase
+    $product_id = isset($_POST['product_id']) ? (int)$_POST['product_id'] : 0;
+    $quantity = isset($_POST['quantity']) ? (int)$_POST['quantity'] : 1;
+    
+    if($product_id <= 0) {
+        header("Location: product.php?id=$product_id&error=Invalid product");
+        exit();
+    }
+    
+    // Get product details
+    $stmt = mysqli_prepare($conn, "SELECT * FROM products WHERE id = ? AND is_active = 1");
+    mysqli_stmt_bind_param($stmt, "i", $product_id);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    $product = mysqli_fetch_assoc($result);
+    
+    if(!$product) {
+        header("Location: product.php?id=$product_id&error=Product not found");
+        exit();
+    }
+    
+    // Check stock
+    if($product['stock'] < $quantity) {
+        header("Location: product.php?id=$product_id&error=Insufficient stock");
+        exit();
+    }
+    
+    // Create direct order in session
+    $_SESSION['direct_order'] = [
+        'product_id' => $product['id'],
+        'name' => $product['name'],
+        'price' => $product['price'],
+        'quantity' => $quantity,
+        'image' => $product['image'],
+        'is_direct' => true
+    ];
+    
+    // Redirect to this same page to show checkout form
+    header("Location: checkout_final.php");
+    exit();
+}
+
 // Fetch user details
 $user_sql = "SELECT * FROM users WHERE id = $user_id";
 $user_result = mysqli_query($conn, $user_sql);
 $user = mysqli_fetch_assoc($user_result);
 
-// Fetch cart items
-$cart_sql = "SELECT p.id, p.name, p.price, c.quantity, 
-                   (p.price * c.quantity) as subtotal
-            FROM shopping_cart c
-            JOIN products p ON c.product_id = p.id
-            WHERE c.user_id = $user_id";
-$cart_result = mysqli_query($conn, $cart_sql);
-
+// Initialize variables
 $cart_items = [];
 $subtotal = 0;
-while ($item = mysqli_fetch_assoc($cart_result)) {
-    $cart_items[] = $item;
-    $subtotal += $item['subtotal'];
-}
-
-// Calculate totals
 $delivery_fee = 150.00;
 $service_fee = 50.00;
-$total = $subtotal + $delivery_fee + $service_fee;
+$total = 0;
+
+// Check if this is a direct order from session
+if(isset($_SESSION['direct_order']) && $_SESSION['direct_order']['is_direct'] === true) {
+    // Direct purchase mode
+    $direct_order = $_SESSION['direct_order'];
+    
+    $cart_items[] = [
+        'id' => $direct_order['product_id'],
+        'name' => $direct_order['name'],
+        'price' => $direct_order['price'],
+        'quantity' => $direct_order['quantity'],
+        'subtotal' => $direct_order['price'] * $direct_order['quantity'],
+        'image' => $direct_order['image']
+    ];
+    
+    $subtotal = $direct_order['price'] * $direct_order['quantity'];
+    $total = $subtotal + $delivery_fee + $service_fee;
+    
+} else {
+    // Normal cart checkout mode
+    $cart_sql = "SELECT p.id, p.name, p.price, p.image, c.quantity, 
+                       (p.price * c.quantity) as subtotal
+                FROM shopping_cart c
+                JOIN products p ON c.product_id = p.id
+                WHERE c.user_id = $user_id";
+    $cart_result = mysqli_query($conn, $cart_sql);
+    
+    while ($item = mysqli_fetch_assoc($cart_result)) {
+        $cart_items[] = $item;
+        $subtotal += $item['subtotal'];
+    }
+    
+    $total = $subtotal + $delivery_fee + $service_fee;
+}
 ?>
 
 <!DOCTYPE html>
@@ -224,19 +289,39 @@ $total = $subtotal + $delivery_fee + $service_fee;
 
 .order-item {
     display: flex;
-    justify-content: space-between;
+    align-items: center;
     padding: 12px 0;
     border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.order-item-image {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 5px;
+    margin-right: 15px;
+}
+
+.order-item-details {
+    flex-grow: 1;
 }
 
 .order-item-name {
     color: #bfbfbf;
     font-size: 15px;
+    margin-bottom: 5px;
+}
+
+.order-item-quantity {
+    color: #999;
+    font-size: 14px;
 }
 
 .order-item-price {
     color: #D4AF37;
     font-weight: bold;
+    min-width: 100px;
+    text-align: right;
 }
 
 .summary-row {
@@ -255,6 +340,17 @@ $total = $subtotal + $delivery_fee + $service_fee;
     font-size: 22px;
     color: #D4AF37;
     font-weight: bold;
+}
+
+.direct-order-note {
+    background: rgba(212,175,55,0.1);
+    border: 1px solid rgba(212,175,55,0.3);
+    border-radius: 8px;
+    padding: 10px 15px;
+    margin-bottom: 20px;
+    color: #D4AF37;
+    font-size: 14px;
+    text-align: center;
 }
 
 /* BUTTONS */
@@ -341,7 +437,10 @@ $total = $subtotal + $delivery_fee + $service_fee;
     <div class="checkout-grid">
         <!-- LEFT: FORM -->
         <div class="checkout-form">
-            <form action="order_success.php" method="POST" id="checkoutForm">
+            <form action="place_order.php" method="POST" id="checkoutForm">
+                <!-- Hidden field to indicate order type -->
+                <input type="hidden" name="order_type" value="<?= isset($_SESSION['direct_order']) ? 'direct' : 'cart' ?>">
+                
                 <!-- BILLING INFORMATION -->
                 <h3 class="section-title">Billing Information</h3>
                 
@@ -451,17 +550,31 @@ $total = $subtotal + $delivery_fee + $service_fee;
         <div class="order-summary">
             <h3 style="color:#D4AF37; margin-bottom: 20px;">Order Summary</h3>
             
+            <?php if(isset($_SESSION['direct_order'])): ?>
+                <div class="direct-order-note">
+                    ⚡ Direct Purchase - Not in Cart
+                </div>
+            <?php endif; ?>
+            
             <div class="order-items">
                 <?php if(empty($cart_items)): ?>
                     <p style="text-align:center; color:#bfbfbf;">Your cart is empty</p>
                 <?php else: ?>
                     <?php foreach($cart_items as $item): ?>
                         <div class="order-item">
-                            <div class="order-item-name">
-                                <?=htmlspecialchars($item['name'])?> × <?=$item['quantity']?>
+                            <?php if(isset($item['image'])): ?>
+                                <img src="<?= htmlspecialchars($item['image']) ?>" alt="<?= htmlspecialchars($item['name']) ?>" class="order-item-image">
+                            <?php endif; ?>
+                            <div class="order-item-details">
+                                <div class="order-item-name">
+                                    <?= htmlspecialchars($item['name']) ?>
+                                </div>
+                                <div class="order-item-quantity">
+                                    Quantity: <?= $item['quantity'] ?>
+                                </div>
                             </div>
                             <div class="order-item-price">
-                                ₱<?=number_format($item['subtotal'], 2)?>
+                                ₱<?= number_format($item['subtotal'], 2) ?>
                             </div>
                         </div>
                     <?php endforeach; ?>
@@ -470,37 +583,31 @@ $total = $subtotal + $delivery_fee + $service_fee;
             
             <div class="summary-row">
                 <span>Subtotal</span>
-                <span>₱<?=number_format($subtotal, 2)?></span>
+                <span>₱<?= number_format($subtotal, 2) ?></span>
             </div>
             <div class="summary-row">
                 <span>Delivery Fee</span>
-                <span>₱<?=number_format($delivery_fee, 2)?></span>
+                <span>₱<?= number_format($delivery_fee, 2) ?></span>
             </div>
             <div class="summary-row">
                 <span>Service Fee</span>
-                <span>₱<?=number_format($service_fee, 2)?></span>
+                <span>₱<?= number_format($service_fee, 2) ?></span>
             </div>
             
             <div class="summary-total">
                 <span>Total</span>
-                <span>₱<?=number_format($total, 2)?></span>
+                <span>₱<?= number_format($total, 2) ?></span>
             </div>
-
-            <div class="checkout-form">
-    <form action="order_success.php" method="POST" id="checkoutForm">
-        <!-- ALL YOUR FORM FIELDS (name, address, delivery options, etc.) -->
-    </form>
-</div>
-
-<!-- In the RIGHT COLUMN -->
-<div class="order-summary">
-    <!-- Order summary content -->
-    
-    <button type="submit" form="checkoutForm" class="checkout-btn">
-        Place Order Now
-    </button>
-    
-            <a href="view_cart.php" class="continue-link">← Back to Cart</a>
+            
+            <button type="submit" form="checkoutForm" class="checkout-btn">
+                Place Order Now
+            </button>
+            
+            <?php if(isset($_SESSION['direct_order'])): ?>
+                <a href="product.php?id=<?= $_SESSION['direct_order']['product_id'] ?>" class="continue-link">← Back to Product</a>
+            <?php else: ?>
+                <a href="view_cart.php" class="continue-link">← Back to Cart</a>
+            <?php endif; ?>
         </div>
     </div>
 </div>
@@ -531,6 +638,12 @@ document.querySelectorAll('.payment-method').forEach(method => {
         this.classList.add('active');
         document.getElementById('paymentMethod').value = this.dataset.method;
     });
+});
+
+// Clear direct order if user leaves page
+window.addEventListener('beforeunload', function() {
+    // You might want to keep this, or remove it to persist the direct order
+    // fetch('clear_direct_order.php'); // Optional: create this file to clear session
 });
 </script>
 
