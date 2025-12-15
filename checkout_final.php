@@ -341,7 +341,7 @@ $total = $subtotal + $delivery_fee + $service_fee;
     <div class="checkout-grid">
         <!-- LEFT: FORM -->
         <div class="checkout-form">
-            <form action="place_order.php" method="POST" id="checkoutForm">
+            <form action="order_success.php" method="POST" id="checkoutForm">
                 <!-- BILLING INFORMATION -->
                 <h3 class="section-title">Billing Information</h3>
                 
@@ -485,11 +485,21 @@ $total = $subtotal + $delivery_fee + $service_fee;
                 <span>Total</span>
                 <span>₱<?=number_format($total, 2)?></span>
             </div>
-            
-            <button type="submit" form="checkoutForm" class="checkout-btn">
-                Place Order Now
-            </button>
-            
+
+            <div class="checkout-form">
+    <form action="order_success.php" method="POST" id="checkoutForm">
+        <!-- ALL YOUR FORM FIELDS (name, address, delivery options, etc.) -->
+    </form>
+</div>
+
+<!-- In the RIGHT COLUMN -->
+<div class="order-summary">
+    <!-- Order summary content -->
+    
+    <button type="submit" form="checkoutForm" class="checkout-btn">
+        Place Order Now
+    </button>
+    
             <a href="view_cart.php" class="continue-link">← Back to Cart</a>
         </div>
     </div>

@@ -2,15 +2,25 @@
 session_start();
 include "db.php";
 
-// for remember Login
 if(isset($_COOKIE['remember_user'])){
     $_SESSION['user_id'] = $_COOKIE['remember_user'];
+    
+    $user_id = $_SESSION['user_id'];
+    $user_query = mysqli_query($conn, "SELECT user_type FROM users WHERE id='$user_id'");
+    if($user_query && mysqli_num_rows($user_query) > 0){
+        $user = mysqli_fetch_assoc($user_query);
+        if($user['user_type'] == 'admin'){
+            header("Location: admin_dashboard.php");
+        } else {
+            header("Location: dashboard.php");
+        }
+        exit();
+    }
 }
 
 $error = "";
 
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
-
     $email = trim($_POST["email"]);
     $password = trim($_POST["password"]);
 
@@ -24,15 +34,17 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         if (password_verify($password, $user['password'])) {
             $_SESSION["user_id"] = $user["id"];
             
-            // Set cookie if remember me is checked
             if(isset($_POST['remember'])) {
-                setcookie("remember_user", $user["id"], time() + (86400 * 7), "/"); // 7 days
+                setcookie("remember_user", $user["id"], time() + (86400 * 7), "/");
             } else {
-                // Clear the cookie if not checked
                 setcookie("remember_user", "", time() - 3600, "/");
             }
             
-            header("Location: dashboard.php");
+            if ($user['user_type'] == 'admin') {
+                header("Location: admin_dashboard.php");
+            } else {
+                header("Location: dashboard.php");
+            }
             exit();
         } else {
             $error = "Incorrect password!";
@@ -48,12 +60,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <head>
 <meta charset="UTF-8">
 <title>Sign In | Flower n GO</title>
-
 <style>
-/* RESET */
 * { margin:0; padding:0; box-sizing:border-box; font-family: Arial, sans-serif; }
-
-/* PAGE BACKGROUND */
 body {
     height:100vh;
     background: radial-gradient(circle at top right, #5b2b12, #120805);
@@ -61,8 +69,6 @@ body {
     justify-content:center;
     align-items:center;
 }
-
-/* MAIN CONTAINER */
 .container {
     display:flex;
     align-items:center;
@@ -70,8 +76,6 @@ body {
     width:900px;
     max-width:90%;
 }
-
-/* LOGO BOX */
 .logo-box {
     background:black;
     padding:18px 30px;
@@ -81,29 +85,6 @@ body {
     box-shadow:0 0 10px rgba(0,0,0,.6);
     font-weight:bold;
 }
-
-.password-wrapper {
-    position: relative;
-    margin-top: 10px;
-}
-
-.toggle-password {
-    position: absolute;
-    right: 15px;
-    top: 50%;
-    transform: translateY(-50%);
-    cursor: pointer;
-    font-size: 15px;
-    opacity: 0.7;
-    transition: 0.2s;
-    user-select: none;
-}
-
-.toggle-password:hover {
-    opacity: 1;
-}
-
-/* FORM BOX */
 .form-box {
     width:360px;
     background:rgba(0,0,0,.8);
@@ -112,43 +93,42 @@ body {
     color:white;
     box-shadow:0 0 20px rgba(0,0,0,.7);
 }
-
-h2 { margin-bottom:6px; }
-
 .subtitle {
     color:#bbb;
     font-size:14px;
     margin-bottom:15px;
 }
-
-/* INPUTS */
 input[type="email"],
 input[type="password"] {
     width:100%;
     padding:12px;
     margin-top:10px;
-    outline:none;
     border:none;
     border-radius:6px;
     font-size:14px;
 }
-
-/* REMEMBER ME SECTION */
+.password-wrapper {
+    position: relative;
+    margin-top: 10px;
+}
+.toggle-password {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    font-size: 15px;
+    opacity: 0.7;
+}
 .remember-me {
     margin-top: 15px;
     display: flex;
     align-items: center;
     font-size: 13px;
 }
-
 .remember-me input[type="checkbox"] {
-    width: auto;
-    margin: 0;
     margin-right: 8px;
-    transform: scale(1.1);
 }
-
-/* BUTTON */
 button {
     width:100%;
     padding:12px;
@@ -161,23 +141,17 @@ button {
     cursor:pointer;
     transition:.3s;
 }
-
 button:hover {
     background:orange;
 }
-
-/* LINKS */
 .links {
     display:flex;
     justify-content:space-between;
     margin-top:10px;
     font-size:13px;
 }
-
 a { color:cyan; text-decoration:none; }
 a:hover { text-decoration:underline; }
-
-/* ERRORS */
 .error {
     background:#ff3d3d;
     padding:8px;
@@ -191,9 +165,7 @@ a:hover { text-decoration:underline; }
 <body>
 
 <div class="container">
-
     <div class="logo-box">🌸 Flower 'n GO</div>
-
     <div class="form-box">
         <h2>Sign In</h2>
         <div class="subtitle">Welcome back — enter your details</div>
@@ -203,9 +175,8 @@ a:hover { text-decoration:underline; }
         <?php endif; ?>
 
         <form method="POST">
-
             <input type="email" name="email" placeholder="Email" required>
-
+            
             <div class="password-wrapper">
                 <input type="password" id="password" name="password" placeholder="Enter your password" required>
                 <span class="toggle-password" onclick="togglePassword()">👁️</span>
@@ -221,19 +192,17 @@ a:hover { text-decoration:underline; }
                 <a href="signup.php">Create account</a>
             </div>
 
+            <form method="POST" action="admin_dashboard.php">
+            <!-- form inputs -->
             <button type="submit" name="signin">SIGN IN</button>
-
-        </form>
+            </form>
     </div>
-
 </div>
 
 <script>
-// password toggle
 function togglePassword(){
   const pw = document.getElementById('password');
   const icon = document.querySelector(".toggle-password");
-
   if(pw.type === 'password'){
     pw.type = 'text';
     icon.textContent = '🙈';
@@ -241,21 +210,6 @@ function togglePassword(){
     pw.type = 'password';
     icon.textContent = '👁️';
   }
-}
-
-// form validation
-const form = document.querySelector("form");
-
-if(form){
-  form.addEventListener('submit', function(e){
-    const email = this.querySelector('input[type="email"]').value.trim();
-    const pw = document.getElementById('password').value.trim();
-
-    if(!email || !pw){
-      e.preventDefault();
-      alert("Please fill in both email and password.");
-    }
-  });
 }
 </script>
 

@@ -2,14 +2,12 @@
 session_start();
 include "db.php";
 
-// Get product ID
 $product_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 if ($product_id <= 0) {
     header("Location: dashboard.php");
     exit();
 }
 
-// Fetch product
 $product_sql = "SELECT * FROM products WHERE id = $product_id AND is_active = 1";
 $product_result = mysqli_query($conn, $product_sql);
 $product = mysqli_fetch_assoc($product_result);
@@ -19,7 +17,6 @@ if (!$product) {
     exit();
 }
 
-// Calculate discount display
 $original_price = $product['price'] * 1.25;
 $discount_percent = 20;
 ?>
@@ -32,14 +29,13 @@ $discount_percent = 20;
 <title><?=htmlspecialchars($product['name'])?> | Flower 'n GO</title>
 <link rel="stylesheet" href="style.css">
 <style>
-/* PRODUCT DETAIL PAGE STYLES */
+
 .product-detail-page {
     max-width: 1200px;
     margin: 30px auto;
     padding: 0 20px;
 }
 
-/* Breadcrumb */
 .breadcrumb {
     color: #bfbfbf;
     margin-bottom: 30px;
@@ -55,7 +51,6 @@ $discount_percent = 20;
     text-decoration: underline;
 }
 
-/* Main Product Grid */
 .product-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -77,7 +72,6 @@ $discount_percent = 20;
     border-radius: 10px;
 }
 
-/* Product Info */
 .product-title {
     font-size: 32px;
     color: #fff;
@@ -116,7 +110,6 @@ $discount_percent = 20;
     display: inline-block;
 }
 
-/* Delivery Info */
 .delivery-info {
     background: rgba(212,175,55,0.1);
     padding: 15px;
@@ -125,14 +118,12 @@ $discount_percent = 20;
     border: 1px solid rgba(212,175,55,0.2);
 }
 
-/* Description */
 .description {
     color: #bfbfbf;
     line-height: 1.6;
     margin: 25px 0;
 }
 
-/* Delivery Options */
 .delivery-options {
     background: #1b120d;
     padding: 25px;
@@ -200,7 +191,6 @@ $discount_percent = 20;
     font-weight: bold;
 }
 
-/* Quantity Selector */
 .quantity-selector {
     display: flex;
     align-items: center;
@@ -235,7 +225,6 @@ $discount_percent = 20;
     font-size: 18px;
 }
 
-/* Total Display */
 .total-display {
     background: #1b120d;
     padding: 20px;
@@ -247,7 +236,6 @@ $discount_percent = 20;
     font-weight: bold;
 }
 
-/* Action Buttons */
 .action-buttons {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -289,7 +277,6 @@ $discount_percent = 20;
     color: #000;
 }
 
-/* Additional Info */
 .additional-info {
     background: #1b120d;
     padding: 25px;
@@ -303,7 +290,6 @@ $discount_percent = 20;
     margin-bottom: 15px;
 }
 
-/* Related Products */
 .related-section {
     margin: 50px 0;
 }
@@ -375,7 +361,6 @@ $discount_percent = 20;
     }
 }
 
-/* POPUP CONFIRMATION */
 .popup-overlay {
     position: fixed;
     top: 0;
@@ -477,7 +462,6 @@ $discount_percent = 20;
 </head>
 <body>
 
-<!-- NAVBAR -->
 <nav class="navbar">
     <div class="logo">🌸 <span class="logo-text">Flower 'n GO</span></div>
     <div class="nav-links">
@@ -491,7 +475,6 @@ $discount_percent = 20;
     <?php endif ?>
 </nav>
 
-<!-- BREADCRUMB -->
 <div class="product-detail-page">
     <div class="breadcrumb">
         <a href="dashboard.php">Home</a> &gt; 
@@ -670,7 +653,6 @@ function changeQuantity(change) {
     totalPrice.textContent = '₱' + (productPrice * newQuantity).toFixed(2);
 }
 
-// Update total when quantity input changes manually
 document.getElementById('quantity').addEventListener('change', function() {
     let quantity = parseInt(this.value);
     if (quantity < 1) quantity = 1;
@@ -681,7 +663,6 @@ document.getElementById('quantity').addEventListener('change', function() {
     document.getElementById('totalPrice').textContent = '₱' + (productPrice * quantity).toFixed(2);
 });
 
-// Delivery date selection
 document.querySelectorAll('.date-option').forEach(option => {
     option.addEventListener('click', function() {
         document.querySelectorAll('.date-option').forEach(o => o.classList.remove('active'));
@@ -690,7 +671,6 @@ document.querySelectorAll('.date-option').forEach(option => {
     });
 });
 
-// Delivery time selection
 document.querySelectorAll('.time-option').forEach(option => {
     option.addEventListener('click', function() {
         document.querySelectorAll('.time-option').forEach(o => o.classList.remove('selected'));
@@ -699,17 +679,14 @@ document.querySelectorAll('.time-option').forEach(option => {
     });
 });
 
-// Add to cart with AJAX
 document.querySelector('.addCartForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
     const formData = new FormData(this);
-    
-    // Get selected date and time
+   
     const selectedDate = document.getElementById('selectedDate').value;
     const selectedTime = document.getElementById('selectedTime').value;
-    
-    // Add delivery options to form data
+  
     formData.append('delivery_date', selectedDate);
     formData.append('delivery_time', selectedTime);
     
@@ -731,12 +708,10 @@ document.querySelector('.addCartForm').addEventListener('submit', function(e) {
     });
 });
 
-// Close popup
 function closePopup() {
     document.getElementById('popup').style.display = 'none';
 }
 
-// Close popup when clicking outside
 document.getElementById('popup').addEventListener('click', function(e) {
     if (e.target === this) {
         closePopup();

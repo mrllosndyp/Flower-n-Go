@@ -3,7 +3,7 @@ session_start();
 include "db.php";
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: signin.php");
+    header("Location: place_order.php");
     exit();
 }
 
@@ -61,8 +61,9 @@ try {
         $item_quantity = $item['quantity'];
         $item_total = $item_price * $item_quantity;
         
-        $item_query = "INSERT INTO order_items (order_id, product_id, quantity, price) 
-                       VALUES ($order_id, {$item['id']}, $item_quantity, $item_price)";
+        // Add the total column
+            $item_query = "INSERT INTO order_items (order_id, product_id, quantity, price, total) 
+            VALUES ($order_id, {$item['id']}, $item_quantity, $item_price, $item_total)";
         
         if (!mysqli_query($conn, $item_query)) {
             throw new Exception("Failed to add order item: " . mysqli_error($conn));
